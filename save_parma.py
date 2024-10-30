@@ -65,35 +65,56 @@ def quantize_weights(weights):
     quantized_weights = np.round(weights * scale_factor).astype(np.int8)
     return quantized_weights
 
-
+"""将整数转换为8位有符号二进制字符串"""
 def to_8bit_signed_binary(num):
-    """将整数转换为8位有符号二进制字符串"""
+
     if num < 0:
         # 如果是负数，则先取反再加1得到补码
         num = (1 << 8) + num
     return format(num & 0xFF, '08b')  # 确保是8位，并格式化为二进制字符串
 
+
+"""将整数转换为指定位数的有符号二进制字符串"""
 def signed_binary(num, bits=8):
-    """将整数转换为指定位数的有符号二进制字符串"""
+
     if num >= 0:
     # if num.any() >= 0:
         return format(num, '0' + str(bits) + 'b')
     else:
         # 对于负数，先取绝对值的二进制，然后取反加一得到补码
         return format((2 ** bits + num) % (2 ** bits), '0' + str(bits) + 'b')
+    
+"""将整数转换为指定位数的有符号二进制字符串"""
+def signed_hex(num, bits=8):
+    if bits % 4 != 0:
+        raise ValueError("位数必须是4的倍数")
+    # 计算能够表示的最大数值（2的bits次方减1）
+    max_value = 2 ** bits - 1
+    # 对于正数或零，直接转换为十六进制
+    if 0 <= num <= max_value:
+        return format(num, '0' + str(bits // 4) + 'x')
+    # 对于负数，先转换为补码形式的正数，再转换为十六进制
+    # 使用模运算得到补码对应的正数值
+    elif -max_value - 1 <= num < 0:
+        # 取绝对值的补码，然后转换为十六进制
+        complement = (2 ** bits + num) % (2 ** bits)
+        return format(complement, '0' + str(bits // 4) + 'x')
+    # 如果数值超出了表示范围，则抛出异常
+    else:
+        raise ValueError("数值超出了表示范围")
 
 
 if __name__ == "__main__":
-    # 从cpkt中加载参数
+# 从cpkt中加载参数
     saver = tf.compat.v1.train.Saver(
         {'W_conv1': W_conv1, 'b_conv1': b_conv1, 'W_conv2': W_conv2, 'b_conv2': b_conv2,
         'W_fc1': W_fc1, 'b_fc1': b_fc1})
     with tf.compat.v1.Session() as sess:
-        # 恢复模型
+# 恢复模型
         module_file = tf.train.latest_checkpoint(cpkt_model_path)
         saver.restore(sess, module_file)
 
-        # 提取参数值并进行reshape
+# 提取参数值并进行reshape
         wconv1 = sess.run(W_conv1)
         re_wconv1 = reshape_weight(wconv1,5,5,1,3)
         bconv1 = sess.run(b_conv1)
@@ -103,7 +124,7 @@ if __name__ == "__main__":
         wfc1 = sess.run(W_fc1)
         bfc1 = sess.run(b_fc1)
 
-        # 量化
+# 量化
         quan_wconv1 = quantize_weights(re_wconv1)
         quan_bconv1 = quantize_weights(bconv1)
         quan_wconv2 = quantize_weights(re_wconv2)
@@ -111,7 +132,7 @@ if __name__ == "__main__":
         quan_wfc1   = quantize_weights(wfc1)
         quan_bfc1   = quantize_weights(bfc1)
 
-        # # 保存到CSV文件
+# 保存到CSV文件
         # with open(w_conv1_path, 'w', newline='') as csvfile:
         #     writer = csv.writer(csvfile)
         #     # 写入W_conv1权重
@@ -178,7 +199,7 @@ if __name__ == "__main__":
         #     writer.writerow(bfc2)
 
 
-        # 量化后保存到csv
+# 量化后保存到csv
         with open(q_w_conv1_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             # 写入W_conv1权重
@@ -221,14 +242,17 @@ if __name__ == "__main__":
             writer.writerow(quan_bfc1)
 
 
-        # 量化后保存到txt
+# 量化后保存到txt
         for i in range(quan_wconv1.shape[0]):
             for j in range(quan_wconv1.shape[1]):
                 matrix = quan_wconv1[i][j]
                 # matrix_str = '\n'.join([' '.join(map(str, row)) for row in matrix])
                 # matrix_str = '\n'.join(['\n'.join(format(x, '08b') for x in row) for row in matrix])
+                # matrix_bin_str = '\n'.join([
+                # '\n'.join(signed_binary(x) for x in row) for row in matrix
+                # ])
                 matrix_bin_str = '\n'.join([
-                '\n'.join(signed_binary(x) for x in row) for row in matrix
+                '\n'.join(signed_hex(x,8) for x in row) for row in matrix
                 ])
                 # matrix_str = ' '.join(str(x) for x in matrix)
                 # 保存到txt文件，文件名包含i和j的索引
@@ -240,9 +264,10 @@ if __name__ == "__main__":
         # 将5x5矩阵转换为字符串，每行元素之间用空格分隔，每行结束后添加换行符
         # matrix_str = '\n'.join([' '.join(map(str, row)) for row in matrix])
         # matrix_str = '\n'.join(str(x) for x in matrix)
-        matrix_str = '\n'.join(signed_binary(x) for x in matrix)
+        # matrix_str = '\n'.join(signed_binary(x) for x in matrix)
+        matrix_str = '\n'.join(signed_hex(x) for x in matrix)
         # 保存到txt文件，文件名包含i和j的索引
-        with open(f'weight//txt//conv1_b_{i}.txt', 'w') as f:
+        with open(f'weight//txt//conv1_b.txt', 'w') as f:
             f.write(matrix_str)
 
 
@@ -250,24 +275,28 @@ if __name__ == "__main__":
             for j in range(quan_wconv2.shape[1]):
                 matrix = quan_wconv2[i][j]
                 # 将5x5矩阵转换为字符串，每行元素之间用空格分隔，每行结束后添加换行符
-                matrix_bin_str = '\n'.join([
-                    '\n'.join(signed_binary(x) for x in row) for row in matrix
+                # matrix_bin_str = '\n'.join([
+                #     '\n'.join(signed_binary(x) for x in row) for row in matrix
+                # ])
+                matrix_str = '\n'.join([
+                    '\n'.join(signed_hex(x) for x in row) for row in matrix
                 ])
                 # matrix_str = '\n'.join([' '.join(map(str, row)) for row in matrix])
                 # matrix_str = ' '.join(str(x) for x in matrix)
                 # 保存到txt文件，文件名包含i和j的索引
-                with open(f'weight//txt//conv2_{i}_{j}.txt', 'w') as f:
+                with open(f'weight//txt//conv2_w_{i}_{j}.txt', 'w') as f:
                     f.write(matrix_str)
 
         matrix = quan_bconv2
         # 将5x5矩阵转换为字符串，每行元素之间用空格分隔，每行结束后添加换行符
         # matrix_str = '\n'.join([' '.join(map(str, row)) for row in matrix])
-        matrix_str = ' '.join(signed_binary(x) for x in matrix)
+        # matrix_str = '\n'.join(signed_binary(x) for x in matrix)
+        matrix_str = '\n'.join(signed_hex(x) for x in matrix)
         # 保存到txt文件，文件名包含i和j的索引
-        with open(f'weight//txt//conv2_b_{i}.txt', 'w') as f:
+        with open(f'weight//txt//conv2_b.txt', 'w') as f:
             f.write(matrix_str)
 
-        np.savetxt('weight//txt//wfc1.txt', quan_wfc1, fmt='%d', delimiter=' ')
+        # np.savetxt('weight//txt//wfc1.txt', quan_wfc1, fmt='%d', delimiter=' ')
         # np.savetxt('weight//txt//bfc1.txt', quan_bfc1, fmt='%d', delimiter=' ')
 
 
@@ -277,7 +306,8 @@ if __name__ == "__main__":
         for row in quan_wfc1:
             # 将每一行中的每个数转换为8位有符号二进制字符串，并写入文件，每个数后面跟一个换行符
             for num in row:
-                f.write(to_8bit_signed_binary(num) + '\n')
+                # f.write(to_8bit_signed_binary(num) + '\n')
+                f.write(signed_hex(num) + '\n')
             # 可选：在每行数字之后添加一个空行以增加可读性
             # f.write('\n')
 
@@ -286,7 +316,8 @@ if __name__ == "__main__":
         # 将5x5矩阵转换为字符串，每行元素之间用空格分隔，每行结束后添加换行符
         # matrix_str = '\n'.join([' '.join(map(str, row)) for row in matrix])
         # matrix_str = '\n'.join(str(x) for x in matrix)
-        matrix_str = '\n'.join(signed_binary(x) for x in matrix)
+        # matrix_str = '\n'.join(signed_binary(x) for x in matrix)
+        matrix_str = '\n'.join(signed_hex(x) for x in matrix)
         # 保存到txt文件，文件名包含i和j的索引
         with open(f'weight//txt//fc1_b.txt', 'w') as f:
             f.write(matrix_str)

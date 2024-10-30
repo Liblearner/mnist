@@ -1,0 +1,10 @@
+DEPTH=3;			--The size of data in bits
+WIDTH=8;			--The size of memory in words
+ADDRESS_RADIX=HEX;	--The radian for address values
+DATA_RADIX=HEX;		--The radian for data values
+CONTENT				--start of (address: data pairs)
+BEGIN
+000: 26;
+001: 7f;
+002: c7;
+END;
